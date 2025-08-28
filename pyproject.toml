@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "netan"
-version = "1.0.2"
+version = "1.0.3"
 description = "Network builder for multi-omics matrices (Rodin-compatible)."
 readme = "README.md"
 authors = [{name = "Boris Minasenko"}]
@@ -14,6 +14,7 @@ dependencies = [
   "rodin>=1.9.10",
   "joblib>=1.2",
   "tqdm>=4.65",
+  "anywidget",
 ]
 
 [project.urls]
