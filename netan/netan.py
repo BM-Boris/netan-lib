@@ -28,7 +28,7 @@ Public API
     .to_csv(path=None, sep=',', index=False)
         Export an edge table with columns:
           source, target, weight, layer, layers
-        (suitable for Cityscape/Cytoscape-style uploads)
+        (suitable for Cytoscape-style uploads)
 
 Assumptions about Rodin-like objects:
 - r.X:        pd.DataFrame (features x samples)
@@ -78,7 +78,7 @@ def _corr(df, thr, weight_flag, _guard=True):
     adj = (cor.abs() >= thr).astype(int)
     np.fill_diagonal(adj.values, 0)
     G = nx.from_pandas_adjacency(adj)
-    if weight_flag == "on":
+    if bool(weight_flag):
         for u, v in G.edges():
             G[u][v]["weight"] = float(abs(cor.loc[u, v]))
     return G, cor.values
@@ -324,6 +324,31 @@ BUILDERS = {
     "rf": _rf,
     "glasso": _glasso,
 }
+# ─────────────────────────────────────────────────────────────────────────────
+# Layout helpers (plot-time only)
+# ─────────────────────────────────────────────────────────────────────────────
+_LAYOUT_FUNCS = {
+    "force-directed": nx.spring_layout,
+    "spring": nx.spring_layout,
+    "circular": nx.circular_layout,
+    "kamada_kawai": nx.kamada_kawai_layout,
+    "random": nx.random_layout,
+}
+
+def _compute_layout(G: nx.Graph, layout: str = "force-directed", seed: int = 777, weighted: bool = True):
+    algo = "force-directed" if layout == "force-directed" else layout
+    func = _LAYOUT_FUNCS.get(algo, nx.spring_layout)
+    kw = {}
+    # seed only for spring-like layouts
+    if algo in ("force-directed", "spring"):
+        kw["seed"] = seed
+    # pass weights for layouts that support it
+    if weighted and algo in ("force-directed", "spring", "kamada_kawai"):
+        kw["weight"] = "weight"
+    return func(G, **kw)
+
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -450,8 +475,7 @@ class Netan:
         node_mode: str = "samples",      # "samples" | "features"
         layer_mode: str = "stack",       # "stack" | "multilayer"
         edge_threshold: float = 0.75,
-        weights: bool = True,
-        layout: str = "force-directed",  # "force-directed"|"spring"|"circular"|"kamada_kawai"|"random"
+        weights: bool = True, 
         combine: str = "mean",           # "mean"|"median"|"max" for multilayer fuse (samples mode)
         n_jobs: int = 1,
         **kwargs,
@@ -493,8 +517,6 @@ class Netan:
         weights : bool, default True
             If True, store edge weights in `G[u][v]["weight"]` (method-specific).
 
-        layout : {"force-directed","spring","circular","kamada_kawai","random"}, default "force-directed"
-            Layout algorithm used to assign 2D coordinates.
 
         combine : {"mean","median","max"}, default "mean"
             Fusion rule for multilayer ("samples" mode) when aggregating per-layer matrices.
@@ -543,9 +565,6 @@ class Netan:
             raise ValueError("node_mode must be 'samples' or 'features'.")
         if layer_mode not in ("stack", "multilayer"):
             raise ValueError("layer_mode must be 'stack' or 'multilayer'.")
-        if layout not in {"force-directed", "spring", "circular", "kamada_kawai", "random"}:
-            raise ValueError("layout must be one of "
-                             "{'force-directed','spring','circular','kamada_kawai','random'}.")
 
         frames = [r.X for r in self.rodins]
         weights_flag = bool(weights)
@@ -633,24 +652,8 @@ class Netan:
                 f"Network too dense: {G.number_of_edges()} edges (> {MAX_EDGES})."
             )
 
-        layouts = {
-            "force-directed": nx.spring_layout,
-            "spring": nx.spring_layout,
-            "circular": nx.circular_layout,
-            "kamada_kawai": nx.kamada_kawai_layout,
-            "random": nx.random_layout,
-        }
-        key = "force-directed" if layout == "force-directed" else layout
-
-        if key in ("force-directed", "spring"):
-            pos = nx.spring_layout(G, seed=777)
-        elif key in layouts:
-            pos = layouts[key](G)
-        else:
-            pos = nx.spring_layout(G, seed=777)
             
         for n in G.nodes():
-            G.nodes[n]["x"], G.nodes[n]["y"] = map(float, pos[n])
             if "__" in str(n) and node_mode == "features":
                 G.nodes[n]["display_id"] = str(n).split("__", 1)[1]
             else:
@@ -703,7 +706,6 @@ class Netan:
         self._meta = dict(
             networkMethod=method,
             edgeThreshold=float(edge_threshold),
-            layout=str(layout),
             layerMode=layer_mode,
             nodeMode=node_mode,
             combine=combine,
@@ -714,7 +716,7 @@ class Netan:
         stats = _network_stats(G)
         _print_stats(stats)
 
-        return
+        return self
 
     # ─────────────────────────────────────────────────────────────────────────
     # Interactive Plotly plot
@@ -732,8 +734,11 @@ class Netan:
         width: Optional[int] = None,          # figure width in pixels
         height: Optional[int] = None,         # figure height in pixels
         title: str = None,
-        continuous_colorscale: str = "Viridis"
+        continuous_colorscale: str = "Viridis",
+        layout: str = "force-directed",  
+        layout_seed: int = 777  
     ) -> FigureWidget:
+        
         """
         Build an interactive Plotly network.
 
@@ -742,6 +747,18 @@ class Netan:
         - Categorical color/shape: nodes are split into legend groups; when a group is
           hidden via legend, edges incident to its nodes disappear dynamically.
         - Continuous color: colorbar is shown; legend-based filtering is disabled.
+
+        Layouts
+        -------
+        - Node coordinates are computed **after** applying `layer`, `weight_min/weight_max`,
+          and `hide_isolated` filters. In other words, the layout is computed on the
+          filtered subgraph, so changing thresholds or the layer will reposition nodes.
+        - Supported layout names: {"force-directed", "spring", "circular", "kamada_kawai", "random"}.
+          "force-directed" is an alias for NetworkX `spring_layout`.
+        - Edge weights are used by force-directed/spring layouts (`weight` attribute) so
+          stronger edges pull nodes closer.
+        - `layout_seed` controls stochastic layouts where applicable (e.g., spring/force-directed).
+          If an unknown layout name is provided, the function falls back to `spring_layout`.
 
         Returns
         -------
@@ -755,6 +772,7 @@ class Netan:
             If provided 'layer', 'color', 'shape', 'node_size', 'width', 'height',
             or 'weight_min/max' are invalid / out of range.
         """
+
         if self.G is None:
             raise RuntimeError("Build the network first (.build).")
 
@@ -902,6 +920,33 @@ class Netan:
             keep_ids = set(edges_df["source"]).union(set(edges_df["target"]))
             nodes_df = nodes_df[nodes_df["id"].isin(keep_ids)].copy()
 
+        # --- Compute layout on the FILTERED subgraph (depends on weight_min/max and layer) ---
+        H = nx.Graph()
+        H.add_nodes_from(nodes_df["id"].astype(str).tolist())
+        for _, r in edges_df.iterrows():
+            s = str(r["source"]); t = str(r["target"]); w = float(r["weight"])
+            H.add_edge(s, t, weight=w)
+        
+        pos_raw = _compute_layout(H, layout=layout, seed=layout_seed, weighted=True)
+        
+        def _xy(i):
+            i = str(i)
+            if i in pos_raw:
+                x, y = pos_raw[i]
+                return float(x), float(y)
+            return (float(np.random.uniform(-1, 1)), float(np.random.uniform(-1, 1)))
+        
+        xy = nodes_df["id"].map(_xy)
+        nodes_df["x"] = [t[0] for t in xy]
+        nodes_df["y"] = [t[1] for t in xy]
+        
+        for _, r in nodes_df.iterrows():
+            nid = str(r["id"])
+            if nid in self.G:
+                self.G.nodes[nid]["x"] = float(r["x"])
+                self.G.nodes[nid]["y"] = float(r["y"])
+
+
         # ---- Build traces ----
         # We keep ONE edge trace that we recompute live when legend toggles change.
         pos = nodes_df.set_index("id")[["x", "y"]].astype(float).to_dict(orient="index")
@@ -1030,16 +1075,16 @@ class Netan:
                 ))
             nodes_df.drop(columns=["_grp"], inplace=True)
 
-        layout = go.Layout(
+        fig_layout = go.Layout(
             title=title, hovermode="closest", showlegend=True,
             margin=dict(l=20, r=60, t=50, b=20),
             xaxis=dict(visible=False),
             yaxis=dict(visible=False),
             width=width, height=height,
-            uirevision="netan"  # keep zoom when rebuilding edges
+            uirevision="netan"
         )
+        fig = FigureWidget(data=traces, layout=fig_layout)
 
-        fig = FigureWidget(data=traces, layout=layout)
 
         # ---- Legend-aware edge rebuilding (categorical mode) ----
         def _visible_node_ids() -> set[str]:
@@ -1076,7 +1121,7 @@ class Netan:
         return fig
 
     # ─────────────────────────────────────────────────────────────────────────
-    # CSV export (Cityscape/Cytoscape-style edge table)
+    # CSV export (Cytoscape-style edge table)
     # ─────────────────────────────────────────────────────────────────────────
     def to_csv(
         self,
@@ -1223,7 +1268,7 @@ def _dispatch_build(
         return _rf(
             df, thr, weights,
             n_jobs=n_jobs,
-            n_estimators=int(kwargs.get("n_estimators", 80)),
+            n_estimators=int(kwargs.get("n_estimators", 160)),
             max_depth=(None if md in (None, "", 0, "0") else int(md)),
         )
     if method == "glasso":
