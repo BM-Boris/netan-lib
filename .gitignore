@@ -1,0 +1,113 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Netan / Python library .gitignore
+# Based on GitHub's Python template + extras for notebooks, coverage, IDEs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# Packaging / distribution
+.build/
+build/
+dist/
+wheelhouse/
+.eggs/
+*.egg
+*.egg-info/
+pip-wheel-metadata/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Typing / linters / analyzers
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+.pyright/
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+.jupyter/lab/workspaces/
+*.ipynb
+
+# Sphinx / docs build
+docs/_build/
+site/
+
+# Logs / profiles
+*.log
+logs/
+prof/
+*.prof
+profile.dat
+
+# Data / temp
+.tmp/
+tmp/
+temp/
+.cache/
+data/
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.swo
+
+# IDEs / project files
+.idea/
+.vscode/
+*.code-workspace
+
+# Node (if examples/docs have JS assets)
+node_modules/
+.npm/
+.pnpm-store/
+yarn-debug.log*
+yarn-error.log*
+npm-debug.log*
+
+# Env files / secrets
+.env
+.env.*
+*.env
+
+# pyenv / poetry / misc
+.python-version
+poetry.lock
+
+# C/C++ build artifacts (if any extensions appear later)
+*.o
+*.a
+*.out
+*.obj
+*.dll
+*.lib
+*.exp
+

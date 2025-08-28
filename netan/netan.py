@@ -1070,6 +1070,7 @@ class Netan:
             display(fig)
         except Exception:
             fig.show()
+            
         return fig
 
     # ─────────────────────────────────────────────────────────────────────────
