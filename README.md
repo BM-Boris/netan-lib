@@ -7,6 +7,8 @@
 > - `r.samples`: `pandas.DataFrame` (first column = sample IDs; order = `r.X.columns`)
 > - `r.features`: `pandas.DataFrame` (index = feature IDs)
 
+> - check https://github.com/BM-Boris/rodin
+
 ---
 
 ## Installation
