@@ -148,7 +148,7 @@ def _rf(
     weights: bool,
     *,
     n_jobs: int,
-    n_estimators: int = 80,
+    n_estimators: int = 160,
     max_depth: Optional[int] = None,
     _guard: bool = True,
 ) -> Tuple[nx.Graph, np.ndarray]:
@@ -503,9 +503,9 @@ class Netan:
 
         **kwargs :
             Extra method-specific parameters:
-              - method="clr"    : n_neighbors=int
-              - method="rf"     : n_estimators=int, max_depth=int|None (0/""/None ⇒ None)
-              - method="glasso" : alpha=float, max_iter=int, tol=float
+              - method="clr"    : n_neighbors:int=2
+              - method="rf"     : n_estimators:int=160, max_depth:int|None (0/""/None ⇒ None)
+              - method="glasso" : alpha:float=0.05, max_iter:int=200, tol:float=1e-4
 
         Returns
         -------
@@ -730,7 +730,7 @@ class Netan:
         node_size: int = 10,                  # node marker size
         width: Optional[int] = None,          # figure width in pixels
         height: Optional[int] = None,         # figure height in pixels
-        title: str = "Network Plot",
+        title: str = None,
         continuous_colorscale: str = "Viridis"
     ) -> FigureWidget:
         """
