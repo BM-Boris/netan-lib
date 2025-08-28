@@ -1064,6 +1064,12 @@ class Netan:
             tr.on_change(_rebuild_edges, "visible")
 
         self.fig = fig
+        try:
+            get_ipython  # есть IPython -> показываем как виджет/фигуру
+            from IPython.display import display
+            display(fig)
+        except Exception:
+            fig.show()
         return fig
 
     # ─────────────────────────────────────────────────────────────────────────
