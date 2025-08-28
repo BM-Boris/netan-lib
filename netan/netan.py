@@ -57,6 +57,7 @@ from sklearn.exceptions import ConvergenceWarning
 from tqdm.auto import tqdm
 import plotly.graph_objects as go
 from plotly.graph_objs import FigureWidget
+import os
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1064,12 +1065,13 @@ class Netan:
             tr.on_change(_rebuild_edges, "visible")
 
         self.fig = fig
-        try:
-            get_ipython  # есть IPython -> показываем как виджет/фигуру
-            from IPython.display import display
-            display(fig)
-        except Exception:
-            fig.show()
+        import os
+        if ("COLAB_RELEASE_TAG" in os.environ) or ("COLAB_GPU" in os.environ):
+            try:
+                from IPython.display import display
+                display(fig)
+            except Exception:
+                pass
             
         return fig
 
