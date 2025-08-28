@@ -2,7 +2,7 @@
 
 **Netan** builds multilayer networks from omics matrices and gives you clean APIs to analyze, visualize, and export them. It supports Spearman, CLR (MI‑z), ExtraTrees‑RF, and Graphical Lasso; both *samples* and *features* node modes; stacked or multilayer graphs (with `consensus` edges); cross‑omics links; an interactive Plotly viewer; and Cytoscape‑ready CSV export.
 
-** Web App: http://netan.io **
+Web App: http://netan.io
 
 > **Works with any *Rodin‑like* object** exposing:
 > - `r.X`: `pandas.DataFrame` (features × samples)
