@@ -58,9 +58,6 @@ fig = nt.plot(
 nt.to_csv()
 ```
 
-If you prefer a more general template with placeholders:
-
-```
 
 ---
 
