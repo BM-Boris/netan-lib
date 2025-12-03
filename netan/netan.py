@@ -12,7 +12,7 @@ Public API
 - class Netan:
     .build(method="spearman", node_mode="samples", layer_mode="stack",
            edge_threshold=0.75, weights=True, layout="force-directed",
-           combine="mean", n_jobs=1, **kwargs) -> self
+           combine="mean", n_jobs=1, **kwargs) 
         Build the network (Spearman/CLR/RF/Glasso). Heavy builders show tqdm progress
         *inside* themselves. Graph is stored in self.G. After build, concise network
         stats are printed (overall + per-edge-layer, including 'Entire' and 'consensus').
@@ -532,7 +532,7 @@ class Netan:
 
         Returns
         -------
-        self : Netan
+        None
             Built container; `self.G` is an undirected graph. Node attrs include:
               - "x","y" (layout), "display_id", "community".
               - (features mode) "object","file","type","compound" for coloring/tooltip.
@@ -716,67 +716,131 @@ class Netan:
         stats = _network_stats(G)
         _print_stats(stats)
 
-        return self
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Interactive Plotly plot
-    # ─────────────────────────────────────────────────────────────────────────
     def plot(
         self,
         *,
-        color: Optional[str] = None,          # column to color nodes by (categorical or continuous)
-        shape: Optional[str] = None,          # column to shape nodes by (categorical)
-        layer: Optional[str] = None,          # edge-layer filter; edge is kept if the layer is present
-        hide_isolated: bool = False,          # drop nodes with no edges after filtering
-        weight_min: Optional[float] = None,   # edge weight lower bound
-        weight_max: Optional[float] = None,   # edge weight upper bound
-        node_size: int = 10,                  # node marker size
-        width: Optional[int] = None,          # figure width in pixels
-        height: Optional[int] = None,         # figure height in pixels
+        color: Optional[str] = None,
+        shape: Optional[str] = None,
+        layer: Optional[str] = None,
+        hide_isolated: bool = False,
+        weight_min: Optional[float] = None,
+        weight_max: Optional[float] = None,
+        node_size: int = 10,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
         title: str = None,
         continuous_colorscale: str = "Viridis",
-        layout: str = "force-directed",  
-        layout_seed: int = 777  
+        layout: str = "force-directed",
+        layout_seed: int = 777
     ) -> FigureWidget:
-        
         """
         Build an interactive Plotly network.
 
+        This method renders the current Netan graph (`self.G`) as a
+        `plotly.graph_objs.FigureWidget`, suitable for use in Jupyter /
+        JupyterLab.
+
         Behavior
         --------
-        - Categorical color/shape: nodes are split into legend groups; when a group is
-          hidden via legend, edges incident to its nodes disappear dynamically.
-        - Continuous color: colorbar is shown; legend-based filtering is disabled.
+        - Categorical `color` / `shape`: nodes are split into legend groups; when a
+          group is hidden via the legend, edges incident to its nodes disappear
+          dynamically.
+        - Continuous `color`: a colorbar is shown; legend-based filtering is
+          disabled (all nodes share one trace per shape).
 
         Layouts
         -------
-        - Node coordinates are computed **after** applying `layer`, `weight_min/weight_max`,
-          and `hide_isolated` filters. In other words, the layout is computed on the
-          filtered subgraph, so changing thresholds or the layer will reposition nodes.
-        - Supported layout names: {"force-directed", "spring", "circular", "kamada_kawai", "random"}.
-          "force-directed" is an alias for NetworkX `spring_layout`.
-        - Edge weights are used by force-directed/spring layouts (`weight` attribute) so
-          stronger edges pull nodes closer.
-        - `layout_seed` controls stochastic layouts where applicable (e.g., spring/force-directed).
-          If an unknown layout name is provided, the function falls back to `spring_layout`.
+        - Node coordinates are computed **after** applying `layer`,
+          `weight_min` / `weight_max`, and `hide_isolated` filters. In other
+          words, the layout is computed on the filtered subgraph, so changing
+          thresholds or the layer will reposition nodes.
+        - Supported layout names: {"force-directed", "spring", "circular",
+          "kamada_kawai", "random"}. "force-directed" is an alias for
+          NetworkX `spring_layout`.
+        - Edge weights are used by the force-directed/spring layouts (`weight`
+          edge attribute), so stronger edges pull nodes closer.
+        - `layout_seed` controls stochastic layouts where applicable
+          (e.g. spring/force-directed). If an unknown layout name is provided,
+          the function falls back to `spring_layout`.
+
+        Interaction
+        -----------
+        - Single click on a node:
+            * first click pins a bold label slightly above the node
+              (prefers `compound`, then `display_id`, then node `id`);
+            * clicking again on a node that already has a pinned label toggles
+              it as a "highlight center": all edges incident to any center and
+              all their neighbors are highlighted with thicker, darker strokes
+              and an outline around the corresponding nodes.
+        - Global reset:
+            * use the "Reset axes" button in the Plotly toolbar (or double-click
+              on the empty background);
+            * the first Reset after a zoom only clears the zoom;
+            * Reset when not zoomed clears all pinned labels and highlights.
+              This behavior can be repeated multiple times.
+
+        Parameters
+        ----------
+        color : Optional[str], default None
+            Name of a node metadata column used to color nodes. If the column is
+            numeric with at least 6 distinct values, it is treated as continuous
+            and `continuous_colorscale` is used; otherwise it is treated as
+            categorical.
+        shape : Optional[str], default None
+            Name of a node metadata column used to choose marker symbols
+            (categorical only). The number of distinct values must not exceed
+            the number of available marker symbols.
+        layer : Optional[str], default None
+            Name of an edge layer to display. If provided, only edges whose
+            `layers` attribute contains this value are kept. If None, all
+            layers are combined.
+        hide_isolated : bool, default False
+            If True, remove nodes that are not incident to any surviving edge
+            after `layer` / `weight_min` / `weight_max` filtering.
+        weight_min : Optional[float], default None
+            Minimum edge weight to keep. If None, the minimum weight in the
+            current graph is used.
+        weight_max : Optional[float], default None
+            Maximum edge weight to keep. If None, the maximum weight in the
+            current graph is used.
+        node_size : int, default 10
+            Base marker size (in pixels) for nodes.
+        width : Optional[int], default None
+            Figure width in pixels. If None, Plotly's default is used.
+        height : Optional[int], default None
+            Figure height in pixels. If None, Plotly's default is used.
+        title : Optional[str], default None
+            Figure title.
+        continuous_colorscale : str, default "Viridis"
+            Name of the Plotly colorscale used when `color` is continuous.
+        layout : str, default "force-directed"
+            Layout name, one of {"force-directed", "spring", "circular",
+            "kamada_kawai", "random"}. See "Layouts" above for details.
+        layout_seed : int, default 777
+            Random seed forwarded to stochastic layouts to obtain reproducible
+            node coordinates.
 
         Returns
         -------
         plotly.graph_objs.FigureWidget
+            A FigureWidget containing the network. Also stored on `self.fig`
+            for later reuse.
 
         Raises
         ------
         RuntimeError
-            If model is not built yet (self.G is None).
+            If the model is not built yet (`self.G is None`).
         ValueError
-            If provided 'layer', 'color', 'shape', 'node_size', 'width', 'height',
-            or 'weight_min/max' are invalid / out of range.
+            If provided `layer`, `color`, `shape`, `node_size`, `width`,
+            `height`, or `weight_min` / `weight_max` are invalid or out of
+            range.
         """
 
         if self.G is None:
             raise RuntimeError("Build the network first (.build).")
 
-        # Validate numeric inputs early
+        # --- basic validation ---
         if not isinstance(node_size, int) or node_size <= 0:
             raise ValueError("node_size must be a positive integer.")
         if width is not None and (not isinstance(width, int) or width <= 0):
@@ -799,7 +863,9 @@ class Netan:
                 return "continuous"
             return "categorical"
 
-        # ---- Build node dataframe (coords + metadata) ----
+        # =====================================================================
+        # Nodes dataframe
+        # =====================================================================
         node_rows = []
         for n, d in self.G.nodes(data=True):
             row = {"id": str(n)}
@@ -812,8 +878,8 @@ class Netan:
 
         node_mode = (self._meta or {}).get("nodeMode", "samples")
 
-        # Join sample/feature metadata for coloring/shaping
         if node_mode == "samples":
+            # join node metadata from the first Rodin object's samples table
             try:
                 S = self.rodins[0].samples.copy()
                 S = _ensure_df(S, "r.samples")
@@ -825,7 +891,7 @@ class Netan:
             except Exception:
                 pass
         else:
-            # features: map id "<tag>__<featureId>" to r.features by featureId within tag
+            # features mode: join r.features by tag
             tag_to_feat = {}
             for nm, r in zip(self.names, self.rodins):
                 tag = (nm or "layer").replace(".", "_")
@@ -834,6 +900,7 @@ class Netan:
                     F = _ensure_df(F, "r.features").copy()
                     F.index = F.index.astype(str)
                     tag_to_feat[tag] = F
+
             split = nodes_df["id"].str.split("__", n=1, expand=True)
             if split.shape[1] == 2:
                 nodes_df["_tag"] = split[0]
@@ -856,20 +923,26 @@ class Netan:
                     if c in nodes_df.columns:
                         nodes_df.drop(columns=c, inplace=True)
 
-            # default color = originating object if not specified
             if not color and "object" in nodes_df.columns:
                 color = "object"
 
-        # Validate requested color/shape columns
+
+        # validate color/shape
         available_cols = set(nodes_df.columns)
         if color and color not in available_cols:
-            raise ValueError(f"Column '{color}' not found in node metadata. "
-                             f"Available columns include: {sorted(available_cols)}")
+            raise ValueError(
+                f"Column '{color}' not found in node metadata. "
+                f"Available: {sorted(available_cols)}"
+            )
         if shape and shape not in available_cols:
-            raise ValueError(f"Column '{shape}' not found in node metadata. "
-                             f"Available columns include: {sorted(available_cols)}")
+            raise ValueError(
+                f"Column '{shape}' not found in node metadata. "
+                f"Available: {sorted(available_cols)}"
+            )
 
-        # ---- Edge dataframe with layer/weight filters ----
+        # =====================================================================
+        # Edges dataframe
+        # =====================================================================
         edge_rows = []
         for u, v, d in self.G.edges(data=True):
             lays = d.get("layers")
@@ -881,7 +954,7 @@ class Netan:
                 "source": str(u),
                 "target": str(v),
                 "weight": float(d.get("weight", 1.0)),
-                "layers": set(lays)
+                "layers": set(lays),
             })
         edges_df = pd.DataFrame(edge_rows)
         if edges_df.empty:
@@ -889,13 +962,11 @@ class Netan:
             self.fig = fig
             return fig
 
-        # Validate 'layer'
         if layer:
             allowed_layers = self.available_layers()
             if layer not in allowed_layers:
                 raise ValueError(f"Unknown layer '{layer}'. Allowed layers: {allowed_layers}")
 
-        # default weight bounds
         wmin = float(edges_df["weight"].min())
         wmax = float(edges_df["weight"].max())
         if weight_min is None:
@@ -903,53 +974,57 @@ class Netan:
         if weight_max is None:
             weight_max = wmax
         if weight_min > weight_max:
-            raise ValueError(f"weight_min ({weight_min}) cannot be greater than weight_max ({weight_max}).")
+            raise ValueError("weight_min cannot be greater than weight_max.")
         if weight_min < wmin or weight_max > wmax:
-            raise ValueError(f"weight_min/max must lie within [{wmin:.6g}, {wmax:.6g}].")
+            raise ValueError(f"weight_min/max must be within [{wmin:.6g}, {wmax:.6g}].")
 
-        # layer filter
         if layer:
             edges_df = edges_df[edges_df["layers"].apply(lambda s: layer in s)].copy()
 
-        # weight filter
-        edges_df = edges_df[(edges_df["weight"] >= float(weight_min)) &
-                            (edges_df["weight"] <= float(weight_max))].copy()
+        edges_df = edges_df[
+            (edges_df["weight"] >= float(weight_min)) &
+            (edges_df["weight"] <= float(weight_max))
+        ].copy()
 
-        # optional: drop isolated nodes after filtering
         if hide_isolated:
             keep_ids = set(edges_df["source"]).union(set(edges_df["target"]))
             nodes_df = nodes_df[nodes_df["id"].isin(keep_ids)].copy()
 
-        # --- Compute layout on the FILTERED subgraph (depends on weight_min/max and layer) ---
+        # =====================================================================
+        # Layout on filtered graph
+        # =====================================================================
         H = nx.Graph()
         H.add_nodes_from(nodes_df["id"].astype(str).tolist())
         for _, r in edges_df.iterrows():
             s = str(r["source"]); t = str(r["target"]); w = float(r["weight"])
             H.add_edge(s, t, weight=w)
-        
+
         pos_raw = _compute_layout(H, layout=layout, seed=layout_seed, weighted=True)
-        
+
         def _xy(i):
             i = str(i)
             if i in pos_raw:
                 x, y = pos_raw[i]
                 return float(x), float(y)
             return (float(np.random.uniform(-1, 1)), float(np.random.uniform(-1, 1)))
-        
+
         xy = nodes_df["id"].map(_xy)
         nodes_df["x"] = [t[0] for t in xy]
         nodes_df["y"] = [t[1] for t in xy]
-        
+
         for _, r in nodes_df.iterrows():
             nid = str(r["id"])
             if nid in self.G:
                 self.G.nodes[nid]["x"] = float(r["x"])
                 self.G.nodes[nid]["y"] = float(r["y"])
 
-
-        # ---- Build traces ----
-        # We keep ONE edge trace that we recompute live when legend toggles change.
         pos = nodes_df.set_index("id")[["x", "y"]].astype(float).to_dict(orient="index")
+
+        # vertical offset for labels (a bit above the node)
+        y_min = float(nodes_df["y"].min())
+        y_max = float(nodes_df["y"].max())
+        y_span = y_max - y_min if y_max > y_min else 1.0
+        label_offset_y = 0.011 * y_span  # slightly above the node
 
         def build_edge_xy(visible_node_ids: set[str]):
             ex, ey = [], []
@@ -962,23 +1037,36 @@ class Netan:
                         ey += [ps["y"], pt["y"], None]
             return ex, ey
 
-        # Initial visible nodes = all currently plotted nodes
         initial_visible_ids = set(nodes_df["id"].astype(str).tolist())
         ex0, ey0 = build_edge_xy(initial_visible_ids)
 
-        # Edge width ~ mean normalized weight (single width for the polyline)
         denom = max(wmax - wmin, 1e-12)
         widths = 0.75 + 3.0 * ((edges_df["weight"] - wmin) / denom)
         mean_width = float(widths.mean()) if len(widths) else 1.0
-        edge_trace = go.Scatter(
-            x=ex0, y=ey0, mode="lines", hoverinfo="none",
-            line=dict(color="#888", width=mean_width),
-            showlegend=False, name="edges"
+
+        # =====================================================================
+        # Traces: edges first (under nodes)
+        # =====================================================================
+        base_edge_trace = go.Scatter(
+            x=ex0, y=ey0, mode="lines",
+            line=dict(color="#888888", width=mean_width),
+            hoverinfo="none",
+            showlegend=False,
+            name="edges"
+        )
+        highlight_edge_trace = go.Scatter(
+            x=[], y=[], mode="lines",
+            line=dict(color="#444444", width=mean_width * 1.4),
+            hoverinfo="none",
+            showlegend=False,
+            name="highlight_edges"
         )
 
-        traces = [edge_trace]
+        traces = [base_edge_trace, highlight_edge_trace]
 
-        # Node groups: build by (color, shape) for categorical behavior
+        # =====================================================================
+        # Node traces
+        # =====================================================================
         def _series(name: Optional[str]) -> pd.Series:
             if not name or name not in nodes_df.columns:
                 return pd.Series([None] * len(nodes_df), index=nodes_df.index)
@@ -988,25 +1076,22 @@ class Netan:
         shape_s = _series(shape)
         color_kind = _col_type(color_s.dropna()) if color else "categorical"
 
-        symbols = ["circle","square","diamond","triangle-up","triangle-down","cross","x","star"]
+        symbols = ["circle", "square", "diamond", "triangle-up",
+                   "triangle-down", "cross", "x", "star"]
 
-        # If too many categories for shape → error
         if shape:
             n_shapes = len(pd.Series(shape_s.fillna("all")).astype(str).unique())
             if n_shapes > len(symbols):
                 raise ValueError(
                     f"'shape' column '{shape}' has {n_shapes} unique values; "
-                    f"this exceeds available symbols ({len(symbols)}). "
-                    f"Reduce categories or map to fewer values."
+                    f"max symbols = {len(symbols)}."
                 )
 
         if color and color_kind == "continuous":
-            # Ensure column is actually numeric after coercion
             if pd.to_numeric(nodes_df[color], errors="coerce").notna().sum() == 0:
-                raise ValueError(f"Column '{color}' cannot be interpreted as numeric for continuous coloring.")
-            # Shape must be categorical
+                raise ValueError(f"Column '{color}' cannot be numeric for continuous coloring.")
             if shape and _col_type(shape_s.dropna()) == "continuous":
-                raise ValueError(f"Column '{shape}' looks continuous, but 'shape' expects a categorical variable.")
+                raise ValueError(f"'shape' should be categorical.")
 
             shp_vals = shape_s.fillna("all").astype(str).unique().tolist()
             shp_map = {v: symbols[i % len(symbols)] for i, v in enumerate(sorted(shp_vals))}
@@ -1020,8 +1105,9 @@ class Netan:
                 ]
                 traces.append(go.Scatter(
                     x=sub["x"].astype(float), y=sub["y"].astype(float),
-                    mode="markers", name=str(sv), hoverinfo="text", text=hover,
-                    showlegend=False,  # continuous: legend toggles are off
+                    mode="markers", name=str(sv),
+                    hoverinfo="text", text=hover,
+                    showlegend=False,
                     customdata=sub["id"].astype(str),
                     marker=dict(
                         color=pd.to_numeric(sub[color], errors="coerce"),
@@ -1030,30 +1116,34 @@ class Netan:
                         colorbar=(dict(title=color) if i == 0 else None),
                         symbol=shp_map.get(sv, "circle"),
                         size=node_size,
-                        line=dict(width=1, color="#333")
+                        line=dict(width=1, color="#333333")
                     )
                 ))
         else:
-            # Categorical color/shape
             palette = [
-                "#c0392b","#2980b9","#27ae60","#e67e22","#8e44ad","#8d6e63",
-                "#d81b60","#7f8c8d","#f4c20d","#00acc1","#ad1457",
-                "#afc52f","#556b2f","#6d214f","#303f9f","#bdc3c7","#9b59b6",
-                "#3f51b5","#ff7043","#c0b283","#40e0d0"
+                "#c0392b", "#2980b9", "#27ae60", "#e67e22", "#8e44ad", "#8d6e63",
+                "#d81b60", "#7f8c8d", "#f4c20d", "#00acc1", "#ad1457",
+                "#afc52f", "#556b2f", "#6d214f", "#303f9f", "#bdc3c7", "#9b59b6",
+                "#3f51b5", "#ff7043", "#c0b283", "#40e0d0"
             ]
             color_vals = sorted(map(str, pd.Series(color_s.fillna("all")).unique().tolist()))
             shape_vals = sorted(map(str, pd.Series(shape_s.fillna("all")).unique().tolist()))
             c_map = {v: palette[i % len(palette)] for i, v in enumerate(color_vals)}
             s_map = {v: symbols[i % len(symbols)] for i, v in enumerate(shape_vals)}
 
-            key = (pd.Series(color_s.fillna("all").astype(str).values, index=nodes_df.index)
-                   + "||" +
-                   pd.Series(shape_s.fillna("all").astype(str).values, index=nodes_df.index))
+            key = (
+                pd.Series(color_s.fillna("all").astype(str).values, index=nodes_df.index)
+                + "||" +
+                pd.Series(shape_s.fillna("all").astype(str).values, index=nodes_df.index)
+            )
             nodes_df["_grp"] = key
 
             for grp, sub in nodes_df.groupby("_grp"):
                 c_val, s_val = grp.split("||", 1)
-                name = c_val if (color and not shape) else (s_val if (shape and not color) else f"{c_val} | {s_val}")
+                name = (
+                    c_val if (color and not shape)
+                    else (s_val if (shape and not color) else f"{c_val} | {s_val}")
+                )
                 hover = [
                     f"ID: {r.get('display_id', r['id'])}"
                     + (f"<br>{color}: {c_val}" if color else "")
@@ -1065,15 +1155,19 @@ class Netan:
                     x=sub["x"].astype(float), y=sub["y"].astype(float),
                     mode="markers", name=name, legendgroup=name,
                     hoverinfo="text", text=hover,
-                    customdata=sub["id"].astype(str),  # for legend-driven edge rebuilds
+                    customdata=sub["id"].astype(str),
                     marker=dict(
-                        color=c_map.get(c_val, "#000"),
+                        color=c_map.get(c_val, "#000000"),
                         symbol=s_map.get(s_val, "circle"),
                         size=node_size,
-                        line=dict(width=1, color="#333")
+                        line=dict(width=1, color="#333333")
                     )
                 ))
             nodes_df.drop(columns=["_grp"], inplace=True)
+
+        base_edge_idx = 0
+        highlight_edge_idx = 1
+        node_trace_indices = list(range(2, len(traces)))  # only node traces
 
         fig_layout = go.Layout(
             title=title, hovermode="closest", showlegend=True,
@@ -1085,31 +1179,250 @@ class Netan:
         )
         fig = FigureWidget(data=traces, layout=fig_layout)
 
+        # =====================================================================
+        # Extra traces: pinned labels + node overlay (on top)
+        # =====================================================================
+        label_trace = go.Scatter(
+            x=[], y=[], mode="text",
+            text=[],
+            textposition="top center",
+            hoverinfo="none",
+            showlegend=False,
+            name="pinned_labels",
+            textfont=dict(size=12)  # bold via <b> tags in text itself
+        )
+        fig.add_trace(label_trace)
+        label_trace_idx = len(fig.data) - 1
 
-        # ---- Legend-aware edge rebuilding (categorical mode) ----
+        highlight_node_trace = go.Scatter(
+            x=[], y=[], mode="markers",
+            marker=dict(
+                size=node_size + 4,
+                color="rgba(0,0,0,0)",
+                line=dict(width=3.3, color="#444444")
+            ),
+            hoverinfo="none",
+            showlegend=False,
+            name="highlight_nodes"
+        )
+        fig.add_trace(highlight_node_trace)
+        highlight_node_idx = len(fig.data) - 1
+
+        # =====================================================================
+        # State
+        # =====================================================================
+        pinned_ids: set[str] = set()
+        highlight_centers: set[str] = set()
+
+        # ---------------------------------------------------------------------
+        # Helpers: visible nodes / base edges / labels / highlight
+        # ---------------------------------------------------------------------
         def _visible_node_ids() -> set[str]:
-            ids = set()
-            # data[0] is the edge polyline; node traces start from index 1
-            for tr in fig.data[1:]:
+            ids: set[str] = set()
+            for idx in node_trace_indices:
+                tr = fig.data[idx]
                 vis = tr.visible
-                if vis in (True, None):  # None == default visible
+                if vis in (True, None):
                     cd = getattr(tr, "customdata", None)
                     if cd is not None:
                         ids.update(map(str, cd))
             return ids
 
-        def _rebuild_edges(*_args):
-            ids = _visible_node_ids()
-            ex, ey = build_edge_xy(ids)
+        def _rebuild_base_edges():
+            visible_ids = _visible_node_ids()
+            ex, ey = build_edge_xy(visible_ids)
             with fig.batch_update():
-                fig.data[0].x = ex
-                fig.data[0].y = ey
+                fig.data[base_edge_idx].x = ex
+                fig.data[base_edge_idx].y = ey
 
-        # Wire callbacks only for node traces (skip edges trace at index 0)
-        for tr in fig.data[1:]:
-            tr.on_change(_rebuild_edges, "visible")
+        def _update_pinned_labels():
+            visible = _visible_node_ids()
+            xs, ys, txt = [], [], []
+            for nid in pinned_ids:
+                nid = str(nid)
+                if nid not in visible:
+                    continue
+                p = pos.get(nid)
+                if p is None:
+                    continue
+                xs.append(p["x"])
+                ys.append(p["y"] + label_offset_y)
+                row = nodes_df.loc[nid]
+
+                # Label priority:
+                #   1) "compound" if present and non-empty
+                #   2) "display_id" if present and non-empty
+                #   3) node id
+                compound_val = row.get("compound", None)
+                if isinstance(compound_val, str) and compound_val.strip():
+                    label_text = compound_val.strip()
+                elif row.get("display_id", None) not in (None, ""):
+                    label_text = str(row.get("display_id"))
+                else:
+                    label_text = nid
+
+                txt.append(f"<b>{label_text}</b>")
+            with fig.batch_update():
+                fig.data[label_trace_idx].x = xs
+                fig.data[label_trace_idx].y = ys
+                fig.data[label_trace_idx].text = txt
+
+        def _clear_pinned_labels():
+            pinned_ids.clear()
+            with fig.batch_update():
+                fig.data[label_trace_idx].x = []
+                fig.data[label_trace_idx].y = []
+                fig.data[label_trace_idx].text = []
+
+        def _clear_highlight():
+            highlight_centers.clear()
+            with fig.batch_update():
+                fig.data[highlight_edge_idx].x = []
+                fig.data[highlight_edge_idx].y = []
+                fig.data[highlight_node_idx].x = []
+                fig.data[highlight_node_idx].y = []
+
+        def _full_reset():
+            _clear_highlight()
+            _clear_pinned_labels()
+
+        def _update_highlight():
+            visible = _visible_node_ids()
+            centers = {c for c in highlight_centers if c in visible}
+            if not centers:
+                _clear_highlight()
+                return
+
+            neigh = set(centers)
+            hex_coords, hey_coords = [], []
+
+            for _, r in edges_df.iterrows():
+                s = str(r["source"]); t = str(r["target"])
+                if ((s in centers) or (t in centers)) and (s in visible) and (t in visible):
+                    neigh.add(s); neigh.add(t)
+                    ps = pos.get(s); pt = pos.get(t)
+                    if ps and pt:
+                        hex_coords += [ps["x"], pt["x"], None]
+                        hey_coords += [ps["y"], pt["y"], None]
+
+            hnx, hny = [], []
+            for nid in neigh:
+                nid = str(nid)
+                if nid not in visible:
+                    continue
+                p = pos.get(nid)
+                if p:
+                    hnx.append(p["x"])
+                    hny.append(p["y"])
+
+            with fig.batch_update():
+                fig.data[highlight_edge_idx].x = hex_coords
+                fig.data[highlight_edge_idx].y = hey_coords
+                fig.data[highlight_node_idx].x = hnx
+                fig.data[highlight_node_idx].y = hny
+
+        # ---------------------------------------------------------------------
+        # Click handler on nodes (single-click only)
+        # ---------------------------------------------------------------------
+        def _handle_node_click(trace, points, state):
+            if not points.point_inds:
+                return
+            idx = int(points.point_inds[0])
+            cd = getattr(trace, "customdata", None)
+            if cd is None or idx >= len(cd):
+                return
+            nid = str(cd[idx])
+
+            # First click on this node → pin a label
+            if nid not in pinned_ids:
+                pinned_ids.add(nid)
+                _update_pinned_labels()
+                return
+
+            # Node already has a pinned label → toggle as highlight center
+            if nid in highlight_centers:
+                highlight_centers.remove(nid)
+            else:
+                highlight_centers.add(nid)
+            _update_highlight()
+
+        # ---------------------------------------------------------------------
+        # Legend visibility callbacks: edges + labels + highlight
+        # ---------------------------------------------------------------------
+        def _on_visible_change(*_args):
+            _rebuild_base_edges()
+            _update_pinned_labels()
+            _update_highlight()
+
+        # ---------------------------------------------------------------------
+        # Autorange handling
+        # ---------------------------------------------------------------------
+        # We reuse the "Reset axes" toolbar button (or Plotly double-click on
+        # the background) as a global "clear selections" trigger:
+        # - xaxis.range changes only mark that a zoom/pan occurred.
+        # - When xaxis.autorange becomes True:
+        #     * if the figure was zoomed → only exit the zoom (keep pins/highlights);
+        #     * if the figure was not zoomed → clear all pins and highlights.
+        # To make this repeatable, we programmatically set autorange back to
+        # False after handling the event so that the next "Reset axes" fires
+        # the callback again.
+        _reset_state = {
+            "zoomed": False,
+            "busy": False,
+        }
+
+        def _on_xrange_change(layout, new_range):
+            """
+            Called when xaxis.range changes (zoom / pan).
+            Does not clear anything; only records that the figure has been zoomed.
+            """
+            if layout.xaxis.autorange is False:
+                _reset_state["zoomed"] = True
+
+        def _on_xautorange_change(layout, new_value):
+            """
+            Called when xaxis.autorange changes.
+            Only x-axis is used to avoid duplicate calls.
+            """
+            if _reset_state["busy"]:
+                return
+
+            # We are only interested in transitions to autorange=True
+            # (Reset axes / double-click on background).
+            if new_value is True:
+                _reset_state["busy"] = True
+                try:
+                    if _reset_state["zoomed"]:
+                        # First Reset axes after a zoom:
+                        # only leave the zoom; keep highlights and labels.
+                        _reset_state["zoomed"] = False
+                    else:
+                        # Not zoomed → treat Reset axes as a global clear.
+                        _full_reset()
+
+                    # To make the next Reset axes trigger again, switch
+                    # autorange back to False (the visible range is preserved).
+                    if layout.xaxis.autorange is True:
+                        layout.xaxis.autorange = False
+                finally:
+                    _reset_state["busy"] = False
+
+        # Subscribe to:
+        #  - xaxis.range changes (to detect zoom),
+        #  - xaxis.autorange changes (to detect "Reset axes").
+        fig.layout.on_change(_on_xrange_change, "xaxis.range")
+        fig.layout.on_change(_on_xautorange_change, "xaxis.autorange")
+
+        for idx in node_trace_indices:
+            tr = fig.data[idx]
+            tr.on_change(_on_visible_change, "visible")
+            try:
+                tr.on_click(_handle_node_click)
+            except Exception:
+                pass
 
         self.fig = fig
+
         import os
         if ("COLAB_RELEASE_TAG" in os.environ) or ("COLAB_GPU" in os.environ):
             try:
@@ -1117,8 +1430,12 @@ class Netan:
                 display(fig)
             except Exception:
                 pass
-            
+
         return fig
+
+
+
+
 
     # ─────────────────────────────────────────────────────────────────────────
     # CSV export (Cytoscape-style edge table)
