@@ -47,8 +47,14 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 import networkx as nx
 import numpy as np
 import pandas as pd
-# keep import to avoid breaking environments that import rodin alongside
-import rodin  # noqa: F401
+import os
+import rodin  
+if ("COLAB_RELEASE_TAG" in os.environ) or ("COLAB_GPU" in os.environ):
+    try:
+        from google.colab import output
+        output.enable_custom_widget_manager()
+    except Exception:
+        pass
 from joblib import Parallel, delayed
 from sklearn.covariance import GraphicalLasso
 from sklearn.ensemble import ExtraTreesRegressor
@@ -57,7 +63,6 @@ from sklearn.exceptions import ConvergenceWarning
 from tqdm.auto import tqdm
 import plotly.graph_objects as go
 from plotly.graph_objs import FigureWidget
-import os
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1179,34 +1184,23 @@ class Netan:
         )
         fig = FigureWidget(data=traces, layout=fig_layout)
 
-        # =====================================================================
-        # Extra traces: pinned labels + node overlay (on top)
-        # =====================================================================
-        label_trace = go.Scatter(
-            x=[], y=[], mode="text",
-            text=[],
-            textposition="top center",
-            hoverinfo="none",
-            showlegend=False,
-            name="pinned_labels",
-            textfont=dict(size=12)  # bold via <b> tags in text itself
-        )
-        fig.add_trace(label_trace)
-        label_trace_idx = len(fig.data) - 1
 
         highlight_node_trace = go.Scatter(
-            x=[], y=[], mode="markers",
+            x=[], y=[],
+            mode="markers",
             marker=dict(
-                size=node_size + 4,
-                color="rgba(0,0,0,0)",
-                line=dict(width=3.3, color="#444444")
+                size=node_size + 2,
+                symbol="circle-open",   
+                color="#444444",        
+                line=dict(width=3),
             ),
             hoverinfo="none",
             showlegend=False,
-            name="highlight_nodes"
+            name="highlight_nodes",
         )
         fig.add_trace(highlight_node_trace)
         highlight_node_idx = len(fig.data) - 1
+
 
         # =====================================================================
         # State
@@ -1237,7 +1231,8 @@ class Netan:
 
         def _update_pinned_labels():
             visible = _visible_node_ids()
-            xs, ys, txt = [], [], []
+            annotations = []
+
             for nid in pinned_ids:
                 nid = str(nid)
                 if nid not in visible:
@@ -1245,34 +1240,41 @@ class Netan:
                 p = pos.get(nid)
                 if p is None:
                     continue
-                xs.append(p["x"])
-                ys.append(p["y"] + label_offset_y)
+
                 row = nodes_df.loc[nid]
 
-                # Label priority:
-                #   1) "compound" if present and non-empty
-                #   2) "display_id" if present and non-empty
-                #   3) node id
+                # 1) если есть непустой compound 
                 compound_val = row.get("compound", None)
                 if isinstance(compound_val, str) and compound_val.strip():
                     label_text = compound_val.strip()
+                # 2) иначе display_id
                 elif row.get("display_id", None) not in (None, ""):
                     label_text = str(row.get("display_id"))
+                # 3) иначе id
                 else:
                     label_text = nid
 
-                txt.append(f"<b>{label_text}</b>")
+                annotations.append(
+                    dict(
+                        x=p["x"],
+                        y=p["y"],
+                        text=f"<b>{label_text}</b>",
+                        showarrow=False,
+                        xanchor="center",
+                        yanchor="bottom",
+                        yshift=8,
+                        font=dict(size=12),
+                    )
+                )
+
             with fig.batch_update():
-                fig.data[label_trace_idx].x = xs
-                fig.data[label_trace_idx].y = ys
-                fig.data[label_trace_idx].text = txt
+                fig.layout.annotations = tuple(annotations)
 
         def _clear_pinned_labels():
             pinned_ids.clear()
             with fig.batch_update():
-                fig.data[label_trace_idx].x = []
-                fig.data[label_trace_idx].y = []
-                fig.data[label_trace_idx].text = []
+                fig.layout.annotations = ()
+
 
         def _clear_highlight():
             highlight_centers.clear()
@@ -1423,7 +1425,6 @@ class Netan:
 
         self.fig = fig
 
-        import os
         if ("COLAB_RELEASE_TAG" in os.environ) or ("COLAB_GPU" in os.environ):
             try:
                 from IPython.display import display
